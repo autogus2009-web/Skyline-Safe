@@ -1,81 +1,47 @@
-# SkyLine Safe: Mestre da Altura
+# SkyLine Safe: Mestre da Altura (v2, Obra 01)
 
-Simulador 2.5D de inspeção e manutenção em altura, feito em Python + Pygame.
+Simulador 2.5D de inspeção e manutenção em altura, em Python + Pygame. Esta versão tem **uma fase completa** (Obra 01) e o Desafio VR. As próximas obras entram depois.
 
 ## Instalação
 
-```bash
-pip install pygame
-python skyline_safe.py
+```powershell
+py -m pip install pygame
+py skyline_safe.py
 ```
 
-No VS Code: abra a pasta `skyline_safe`, selecione o interpretador Python e rode `skyline_safe.py` (F5). Se usar ambiente virtual:
-
-```bash
-python -m venv .venv
-# Windows
-.venv\Scripts\activate
-# Linux / macOS
-source .venv/bin/activate
-pip install -r requirements.txt
-python skyline_safe.py
-```
+No Linux/macOS use `python3`. Se `python` não for reconhecido no Windows, use `py` ou instale o Python em python.org marcando "Add python.exe to PATH".
 
 ## Controles
 
 | Tecla | Ação |
 |---|---|
-| `A` / `D` ou setas | deslocar na horizontal sobre as vigas |
-| `W` / `S` | subir e descer nos montantes |
-| `1` | ancorar / liberar o gancho 1 (verde) |
-| `2` | ancorar / liberar o gancho 2 (azul) |
-| `CTRL` | agachar e firmar o corpo durante rajadas |
-| `E` | iniciar tarefa na estação de manutenção |
-| `R` | iniciar resgate do colega suspenso |
-| `TAB` | abrir a ordem de serviço |
-| `ESC` | pausa (com `Q` abandona a missão) |
+| `A` / `D` ou setas | mover na horizontal |
+| `W` / `S` | subir e descer |
+| `1` / `2` | ancorar ou liberar o gancho 1 (verde) / gancho 2 (azul) |
+| `W A S D` ao ancorar | mira o gancho; o anel branco mostra onde ele prende |
+| `CTRL` | agachar e firmar o corpo |
+| `E` | iniciar tarefa na estação |
+| `R` | iniciar resgate |
+| `TAB` | ordem de serviço |
+| `M` | liga/desliga o som |
+| `ESC` | pausa (`Q` abandona) |
 | `F1` | tela cheia |
 
-## Regra de ouro do talabarte duplo
+## O que tem na Obra 01
 
-Para avançar: ancore o gancho livre no próximo ponto, **depois** libere o gancho de trás. O jogo **permite** você soltar os dois — mas mover-se fora do solo sem nenhuma ancoragem encerra a missão imediatamente.
+- **Pré-check físico:** lupa com 4 pontos clicáveis (ou teclas 1–4) por EPI. Só dá para aprovar ou descartar depois de inspecionar os 4. Capacete, cinturão, fita de ancoragem, trava-quedas e talabarte sempre aparecem no kit. Demorar mais de 1m30 no pré-check desconta tempo da obra.
+- **Talabarte duplo:** a corda tem limite e trava o movimento. Sem nenhum gancho fora do solo, a missão falha.
+- **Pontos de ancoragem corroidos:** marrons com X. Ancorar neles gera infração e o gancho cede em 3 s.
+- **Clima:** anemômetro, rajadas, abrigos, balanço do personagem e tela tremendo acima do limite de 11 m/s.
+- **Tarefas:** solda, torque de parafusos e troca de lâmpada (sequência LOTO).
+- **Resgate:** procedimento em 5 passos (1–5) e depois descida controlada, com a contagem de trauma por suspensão correndo.
+- **Cada infração** custa pontos e 3 segundos.
+- **Relatório:** auditoria do pré-check, infrações e lições da NR-35 ligadas aos seus erros.
+- **Som:** efeitos e trilhas gerados por código, sem arquivos externos. A música muda com vento forte, pouco tempo e resgate.
+- **Desafio VR:** prazo por alvo, combo até x5, -5 s quando o alvo expira.
 
-## Sistemas implementados
+## Adicionando novas obras
 
-- **Pré-check de EPI** — 6 itens sorteados por missão, laudo de inspeção com 4 pontos cada, decisão aprovar/descartar. Aprovar item danificado provoca falha do equipamento em serviço (gancho inutilizado, trava-quedas que não bloqueia etc.). Descartar item bom custa tempo e pontos.
-- **Física de ancoragem** — talabarte com comprimento útil limitado (`CABO_MAX`); o movimento trava quando a corda tensiona, forçando a alternância dos ganchos.
-- **Clima dinâmico** — rajadas que sobem e descem, anemômetro analógico, limite regulamentar de 11 m/s, abrigos marcados no mapa, medidor de equilíbrio e queda contida pelo talabarte.
-- **Manutenção** — 4 minijogos: solda de reforço, torque de parafusos (com sub/sobretorque e parafuso espanado), troca de lâmpada de balizamento com sequência LOTO, e ensaio de soldas por líquido penetrante.
-- **Resgate em altura** — colega suspenso com contagem regressiva de trauma por suspensão e descida controlada com faixa de velocidade segura.
-- **Relatório final** — pontuação de segurança, auditoria do pré-check item a item e registro cronológico de infrações, com classificação ouro/prata/bronze.
-- **Modos** — Carreira com 5 obras progressivas (progresso salvo em `skyline_save.json`) e Desafio VR de sprint de ancoragem contra o relógio.
-
-## Ajuste de dificuldade
-
-As constantes no topo do arquivo controlam o balanceamento:
-
-```python
-CABO_MAX = 185.0        # comprimento útil do talabarte
-RAIO_ANCORAGEM = 200.0  # alcance do braço
-LIMITE_VENTO = 11.0     # m/s antes da interrupção obrigatória
-ESCALA_METRO = 22.0     # pixels por metro
-TEMPO_TRAUMA = 150.0    # segundos até o trauma por suspensão
-```
-
-Novas obras são adicionadas à lista `NIVEIS`: basta definir o tamanho da treliça (`cols`, `linhas`, `sx`, `sy`), o perfil de vento, as coordenadas `(coluna, linha)` das tarefas, do resgate e dos abrigos.
-
-## Estrutura do código
-
-| Seção | Conteúdo |
-|---|---|
-| 1–2 | configuração, paleta e utilitários de desenho |
-| 3 | catálogo de EPIs e geração do kit com defeitos |
-| 4 | `Estrutura` (grafo de vigas percorríveis) e definição dos níveis |
-| 5 | minijogos de manutenção e resgate |
-| 6 | `Jogador` (movimento no grafo, ganchos, tensionamento) |
-| 7 | cenas: menu, ajuda, seleção, pré-check, jogo, relatório |
-| 8 | `App`, persistência e loop principal |
-
-## Observações
-
-O jogo desenha tudo com primitivas do Pygame — não há dependência de assets externos. Para a versão VR/3D descrita no conceito original, esta base serve como protótipo de mecânicas: as regras de ancoragem, o modelo de vento e o sistema de infrações são independentes da renderização.
+1. Em `NIVEIS`, copie o modelo comentado e ajuste tamanho, vento, tarefas, resgate e abrigos.
+2. Para um visual novo, descomente/crie uma entrada em `TEMAS` e um ramo em `CenaJogo.desenhar_tema()`.
+3. A seleção de obras e o "Próxima obra" aparecem sozinhos quando houver mais de uma.
