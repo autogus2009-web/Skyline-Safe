@@ -600,12 +600,16 @@ CATALOGO_EPI = [
 ]
 
 
-def gerar_kit(qtd_defeitos):
-    """Capacete, cinturao, fita de ancoragem, trava-quedas e talabarte sempre
-    presentes (+1 item extra sorteado). Alguns saem de fabrica com defeito."""
+KIT_TAMANHO = 6                          # quantos EPIs o jogador leva
+ESSENCIAIS = ("CAP", "CNT", "TAL")       # sem eles, infracao de seguranca
+SUGESTAO_KIT = ("CAP", "CNT", "FTA", "TRQ", "TAL", "MSQ")
+
+
+def gerar_kit(qtd_defeitos, siglas=None):
+    """Monta o kit com os EPIs escolhidos pelo jogador (siglas). Sem escolha
+    (modo VR), usa o kit sugerido. Alguns itens saem de fabrica com defeito."""
     base = {e["sigla"]: e for e in CATALOGO_EPI}
-    escolhidos = [base[k] for k in ("CAP", "CNT", "FTA", "TRQ", "TAL")]
-    escolhidos.append(base[random.choice(["MSQ", "TPO", "FER"])])
+    escolhidos = [base[k] for k in (siglas or SUGESTAO_KIT) if k in base]
     random.shuffle(escolhidos)
     com_defeito = random.sample(range(len(escolhidos)), min(qtd_defeitos, len(escolhidos)))
     kit = []
@@ -1717,7 +1721,7 @@ class CenaBriefing(Cena):
             if self.vr:
                 self.app.trocar(CenaJogo(self.app, self.nivel_idx, kit_aprovado(), vr=True))
             else:
-                self.app.trocar(CenaPreCheck(self.app, self.nivel_idx))
+                self.app.trocar(CenaSelecaoEPI(self.app, self.nivel_idx))
 
     def atualizar(self, dt):
         mp = pygame.mouse.get_pos()
@@ -1775,14 +1779,102 @@ class CenaBriefing(Cena):
         self.b_ok.desenhar(surf)
 
 
-# ------------------------------------------------------------- PRE-CHECK ----
-class CenaPreCheck(Cena):
-    HOT = [(0.2, 0.26), (0.8, 0.26), (0.22, 0.78), (0.78, 0.78)]
+# ------------------------------------------------------- ESCOLHA DE EPI ----
+class CenaSelecaoEPI(Cena):
+    """O jogador escolhe quais EPIs leva para a obra (KIT_TAMANHO de 8)."""
 
     def __init__(self, app, nivel_idx):
         super().__init__(app)
         self.nivel_idx = nivel_idx
-        self.kit = gerar_kit(NIVEIS[nivel_idx]["defeitos"])
+        self.fundo = Fundo(21, NIVEIS[nivel_idx].get("tema"))
+        ant = getattr(app, "escolha_epi", None) or SUGESTAO_KIT
+        self.escolha = [e["sigla"] for e in CATALOGO_EPI if e["sigla"] in ant]
+        self.msg, self.msg_t = "", 0.0
+        self.cards = [pygame.Rect(50 + (i % 4) * 300, 130 + (i // 4) * 215, 280, 195)
+                      for i in range(len(CATALOGO_EPI))]
+        self.b_ok = Botao((LARGURA // 2 + 20, ALTURA - 66, 340, 46), "LEVAR ESTE KIT  [ENTER]", pygame.K_RETURN, C_AMARELO)
+        self.b_sug = Botao((LARGURA // 2 - 360, ALTURA - 66, 340, 46), "KIT SUGERIDO  [S]", pygame.K_s)
+        self.b_voltar = Botao((50, ALTURA - 66, 150, 46), "ESC", pygame.K_ESCAPE)
+
+    def alternar(self, i):
+        sig = CATALOGO_EPI[i]["sigla"]
+        if sig in self.escolha:
+            self.escolha.remove(sig)
+        elif len(self.escolha) >= KIT_TAMANHO:
+            self.msg, self.msg_t = "Kit cheio: devolva um item antes de pegar outro.", 2.0
+            self.app.audio.tocar("erro")
+            return
+        else:
+            self.escolha.append(sig)
+        self.app.audio.tocar("ui")
+
+    def evento(self, ev):
+        if self.b_voltar.clicado(ev):
+            self.app.trocar(CenaBriefing(self.app, self.nivel_idx))
+            return
+        if self.b_sug.clicado(ev):
+            self.escolha = list(SUGESTAO_KIT)
+            self.app.audio.tocar("ui")
+        if ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1:
+            for i, c in enumerate(self.cards):
+                if c.collidepoint(ev.pos):
+                    self.alternar(i)
+        if ev.type == pygame.KEYDOWN and pygame.K_1 <= ev.key <= pygame.K_8:
+            self.alternar(ev.key - pygame.K_1)
+        if self.b_ok.clicado(ev):
+            if len(self.escolha) != KIT_TAMANHO:
+                self.msg, self.msg_t = "Escolha exatamente {} EPIs ({} selecionados).".format(
+                    KIT_TAMANHO, len(self.escolha)), 2.2
+                self.app.audio.tocar("erro")
+                return
+            self.app.escolha_epi = list(self.escolha)
+            self.app.trocar(CenaPreCheck(self.app, self.nivel_idx, self.escolha))
+
+    def atualizar(self, dt):
+        self.msg_t = max(0.0, self.msg_t - dt)
+        mp = pygame.mouse.get_pos()
+        for b in (self.b_ok, self.b_sug, self.b_voltar):
+            b.atualizar(mp)
+
+    def desenhar(self, surf):
+        self.fundo.desenhar(surf, Vector2(0, 0))
+        veu = pygame.Surface((LARGURA, ALTURA), pygame.SRCALPHA)
+        veu.fill((0, 0, 0, 120))
+        surf.blit(veu, (0, 0))
+        texto(surf, "ESCOLHA SEU KIT DE EPI", (LARGURA // 2, 44), "sub", C_AMARELO, centro=True, sombra=True)
+        texto(surf, "{}  -  leve {} dos {} equipamentos (clique ou teclas 1-8)".format(
+            NIVEIS[self.nivel_idx]["nome"], KIT_TAMANHO, len(CATALOGO_EPI)),
+            (LARGURA // 2, 82), "ui_p", C_TEXTO_FRACO, centro=True)
+        n = len(self.escolha)
+        texto(surf, "Selecionados: {}/{}".format(n, KIT_TAMANHO), (LARGURA - 50, 100), "ui_g",
+              C_VERDE if n == KIT_TAMANHO else C_LARANJA, direita=True)
+        for i, (c, d) in enumerate(zip(self.cards, CATALOGO_EPI)):
+            marcado = d["sigla"] in self.escolha
+            painel(surf, c, borda=C_VERDE if marcado else C_PAINEL_BORDA)
+            icone_epi(surf, d["sigla"], pygame.Rect(c.x + 14, c.y + 14, 92, 92))
+            texto(surf, "[{}] {}".format(i + 1, d["sigla"]), (c.x + 122, c.y + 20), "ui_g", C_LARANJA)
+            if d["sigla"] in ESSENCIAIS:
+                texto(surf, "ESSENCIAL", (c.x + 122, c.y + 52), "mono_p", C_AMARELO)
+            texto(surf, "NO KIT" if marcado else "livre", (c.x + 122, c.y + 76), "mono_p",
+                  C_VERDE if marcado else C_TEXTO_FRACO)
+            texto_bloco(surf, d["nome"], (c.x + 14, c.y + 122), c.w - 28, "ui_p")
+        texto_bloco(surf, "Capacete, cinturao e talabarte duplo sao essenciais: sair sem eles e infracao "
+                    "(-10 pts cada). Cada item levado precisa ser inspecionado no pre-check.",
+                    (50, 570), LARGURA - 100, "ui_p", C_TEXTO_FRACO)
+        for b in (self.b_ok, self.b_sug, self.b_voltar):
+            b.desenhar(surf)
+        if self.msg_t > 0:
+            texto(surf, self.msg, (LARGURA // 2, ALTURA - 90), "ui", C_AMARELO, centro=True)
+
+
+# ------------------------------------------------------------- PRE-CHECK ----
+class CenaPreCheck(Cena):
+    HOT = [(0.2, 0.26), (0.8, 0.26), (0.22, 0.78), (0.78, 0.78)]
+
+    def __init__(self, app, nivel_idx, siglas=None):
+        super().__init__(app)
+        self.nivel_idx = nivel_idx
+        self.kit = gerar_kit(NIVEIS[nivel_idx]["defeitos"], siglas or getattr(app, "escolha_epi", None))
         self.sel = 0
         self.fundo = Fundo(21, NIVEIS[nivel_idx].get("tema"))
         self.msg, self.msg_t = "", 0.0
@@ -1810,7 +1902,7 @@ class CenaPreCheck(Cena):
 
     def evento(self, ev):
         if self.b_voltar.clicado(ev):
-            self.app.trocar(CenaBriefing(self.app, self.nivel_idx))
+            self.app.trocar(CenaSelecaoEPI(self.app, self.nivel_idx))
             return
         if ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1:
             for i, c in enumerate(self.cards):
@@ -1998,6 +2090,11 @@ class CenaJogo(Cena):
                 self.tempo -= 15
             if penal_tempo:
                 self.avisar("Pre-check demorado: -{} s de obra".format(penal_tempo), C_LARANJA, 3.5)
+        if not vr:
+            levados = {e.sigla for e in kit}
+            for sig in ESSENCIAIS:
+                if sig not in levados:
+                    self.registrar("EPI essencial ausente do kit: {}".format(sig), 10)
         if self.epi_ruins:
             self.registrar("Pre-check falho: EPI danificado liberado para uso ({})".format(
                 ", ".join(e.sigla for e in self.epi_ruins)), 12)
@@ -3027,7 +3124,7 @@ class CenaRelatorio(Cena):
             if self.j.vr:
                 self.app.trocar(CenaJogo(self.app, self.j.nivel_idx, kit_aprovado(), vr=True))
             else:
-                self.app.trocar(CenaPreCheck(self.app, self.j.nivel_idx))
+                self.app.trocar(CenaSelecaoEPI(self.app, self.j.nivel_idx))
         elif self.b_prox and self.b_prox.clicado(ev):
             self.app.trocar(CenaBriefing(self.app, self.j.nivel_idx + 1))
         if ev.type == pygame.MOUSEWHEEL:
